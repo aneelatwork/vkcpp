@@ -1,12 +1,14 @@
-#ifndef _RAKS_VKCPP_ELEMENTS_INCLUDED_
-#define _RAKS_VKCPP_ELEMENTS_INCLUDED_
+#ifndef _VKCPP_ELEMENTS_INCLUDED_
+#define _VKCPP_ELEMENTS_INCLUDED_
 
 #include <vulkan/vulkan.h>
+
 #include <vector>
 #include <stdexcept>
+#include <functional>
+#include <string_view>
+#include <cassert>
 
-namespace raks
-{
 namespace vkcpp
 {
 enum class derived_handle_kind : bool
@@ -36,8 +38,8 @@ public:
 
     explicit operator bool() const noexcept { return ( VK_NULL_HANDLE != native_ ); }
 
-    native_type native() const noexcept { return native_; }
-    native_type* pnative() noexcept { return &native_; }
+    [[nodiscard]] native_type native() const noexcept { return native_; }
+    [[nodiscard]] native_type* pnative() noexcept { return &native_; }
 
 protected:
     explicit unique_handle( native_type const native ) noexcept
@@ -89,24 +91,22 @@ public:
     [[nodiscard]] native_type replace( weak_handle&& handle ) noexcept
     {
         assert( *this );
-        auto const result = this->native_;
+        auto const result = this->native();
         reset_impl( std::move( handle ) );
         return result;
     }
     [[nodiscard]] native_type replace( native_type const native = VK_NULL_HANDLE ) noexcept
     {
         assert( *this );
-        auto const result = this->native_;
-        this->native = native;
+        auto const result = this->native();
+        *( this->pnative() ) = native;
         return result;
     }
 
-    [[nodiscard]] native_type* pnative() { return this->native_; }
-
     native_type release() noexcept
     {
-        auto result = this->native_;
-        this->native_ = VK_NULL_HANDLE;
+        auto result = this->native();
+        *( this->pnative() ) = VK_NULL_HANDLE;
         return result;
     }
     ~weak_handle() noexcept { assert( !( *this ) ); }
@@ -114,8 +114,8 @@ public:
 private:
     void reset_impl( weak_handle&& handle ) noexcept
     {
-        this->native_ = handle.native_;
-        handle.native_ = VK_NULL_HANDLE;
+        *(this->pnative()) = handle.native();
+        *(handle.pnative()) = VK_NULL_HANDLE;
     }
 };
 
@@ -200,16 +200,19 @@ protected:
     derived_handle_base& operator=( derived_handle_base&& handle ) noexcept = default;
     ~derived_handle_base() = default;
 
+    explicit operator bool() const { return ( bool )wnative_; }
 
-    explicit operator bool() const { return wnative_; }
-
-    void reset( source_native_type const source_native )
+    bool free( source_native_type const source_native )
     {
         if( *this )
         {
             native_deleter( source_native, wnative_.replace(), nullptr );
+            return true;
         }
+        return false;
     }
+
+    void reset( source_native_type const source_native ) noexcept { free( source_native ); }
 
     void reset( source_native_type const source_native, derived_handle_base&& handle )
     {
@@ -231,12 +234,14 @@ protected:
         assert( 0 == index );
         return wnative_.pnative();
     }
+
     native_type native( size_t const index = 0 )
     {
         assert( 0 == index );
         return wnative_.native();
     }
-    size_t size() const { return 1; }
+
+    [[nodiscard]] size_t size() const { return 1; }
 
 private:
     weak_handle< native_type > wnative_;
@@ -300,12 +305,14 @@ protected:
         assert( index < wnative_vector_.size() );
         return wnative_vector_[ index ].pnative();
     }
+
     native_type native( size_t const index = 0 ) noexcept
     {
         assert( index < wnative_vector_.size() );
         return wnative_vector_[ index ].native();
     }
-    size_t size() const noexcept { return wnative_vector_.size(); }
+
+    [[nodiscard]] size_t size() const noexcept { return wnative_vector_.size(); }
 
 private:
     std::vector< weak_handle< native_type > > wnative_vector_;
@@ -337,10 +344,7 @@ public:
     derived_handle( derived_handle& ) = delete;
     derived_handle& operator=( derived_handle& ) = delete;
 
-    derived_handle& operator=( derived_handle&& handle ) noexcept
-    {
-        reset( source_native_, std::move( handle ) );
-    }
+    derived_handle& operator=( derived_handle&& handle ) noexcept { reset( source_native_, std::move( handle ) ); }
 
     ~derived_handle() { base_type::free( source_native_ ); }
 
@@ -362,11 +366,10 @@ public:
         }
     }
 
-    native_type native( size_t const index = 0 ) const noexcept { return base_type::native( index ); }
-    source_native_type source_native() const noexcept { return source_native_; }
+    [[nodiscard]] native_type native( size_t const index = 0 ) const noexcept { return base_type::native( index ); }
+    [[nodiscard]] source_native_type source_native() const noexcept { return source_native_; }
 
 protected:
-
     explicit derived_handle( size_t const size, source_native_type const source_native = VK_NULL_HANDLE )
         : base_type( size )
         , source_native_( source_native )
@@ -374,8 +377,9 @@ protected:
 
 private:
     source_native_type source_native_;
-
 };
+
+void __stdcall destroy_debug_report( VkInstance, VkDebugReportCallbackEXT, VkAllocationCallbacks const* );
 
 } // namespace private_
 
@@ -401,11 +405,11 @@ public:
         : packed_( packed )
     {}
 
-    unsigned short major() const { return ( packed_ >> major_bit_offset ); }
+    [[nodiscard]] unsigned short major() const { return ( packed_ >> major_bit_offset ); }
 
-    unsigned short minor() const { return ( ( packed_ >> minor_bit_offset ) & minor_bit_mask ); }
+    [[nodiscard]] unsigned short minor() const { return ( ( packed_ >> minor_bit_offset ) & minor_bit_mask ); }
 
-    unsigned short patch() const { return ( packed_ & patch_bit_mask ); }
+    [[nodiscard]] unsigned short patch() const { return ( packed_ & patch_bit_mask ); }
 
     explicit operator uint32_t() const { return packed_; }
 };
@@ -581,7 +585,7 @@ struct exception : public std::runtime_error
 
     exception( int const status, dbg::object const object, char const* const error_str )
         : std::runtime_error( error_str )
-        , result( static_cast< raks::vkcpp::result >( status ) )
+        , result( static_cast< vkcpp::result >( status ) )
         , object( object )
     {}
 };
@@ -598,10 +602,16 @@ struct layer : public VkLayerProperties
 public:
     using id_type = char const*;
 
-    static constexpr id_type const vendor_standard_layer = "VK_LAYER_LUNARG_standard_validation";
+    static constexpr id_type const vendor_standard_layer = "VK_LAYER_KHRONOS_validation";
     static constexpr id_type const vendor_api_dump = "VK_LAYER_LUNARG_api_dump";
 
     static std::vector< layer > enumerate();
+
+    [[nodiscard]] std::string_view name() const { return std::string_view( static_cast< char const* >( layerName ) ); }
+    [[nodiscard]] std::string_view desc() const { return std::string_view( static_cast< char const* >( description ) ); }
+
+    [[nodiscard]] version spec_version() const { return version( specVersion ); }
+    [[nodiscard]] version impl_version() const { return version( implementationVersion ); }
 };
 
 struct extension : public VkExtensionProperties
@@ -612,6 +622,9 @@ struct extension : public VkExtensionProperties
     static constexpr id_type const khr_surface = VK_KHR_SURFACE_EXTENSION_NAME;
 
     static std::vector< extension > enumerate( layer::id_type layer_id );
+
+    [[nodiscard]] std::string_view name() const { return std::string_view( static_cast< char const* >( extensionName ) ); }
+    [[nodiscard]] version spec_version() const { return version( specVersion ); }
 };
 
 class instance : public private_::source_handle< VkInstance, vkDestroyInstance >
@@ -669,6 +682,29 @@ public:
     };
 };
 
+namespace dbg
+{
+using callback_type = std::function< bool( flag flag, object const, unsigned long long const object_id, int const location, int const message_code,
+                                           std::string_view layer_prefix, std::string_view message, void* puserdata ) >;
+
+struct report : public private_::derived_handle< VkInstance, VkDebugReportCallbackEXT, private_::destroy_debug_report, derived_handle_kind::unique >
+{
+private:
+    callback_type mc_report_;
+    void* puser_data_;
+
+public:
+    using base_type = private_::derived_handle< VkInstance, VkDebugReportCallbackEXT, private_::destroy_debug_report, derived_handle_kind::unique >;
+
+    report( vkcpp::instance instance, callback_type cb, flags flags, void* puser );
+
+    bool operator()( flags flags, object object, int message_code, std::string const& message );
+    bool operator()( flag flag, object object, unsigned long long object_id, int location, int message_code, std::string_view layer_prefix,
+                     std::string_view message );
+};
+
+} // namespace dbg
+
 class physical_device
 {
 private:
@@ -685,19 +721,25 @@ public:
     };
     using id_type = uint32_t;
 
-    static std::vector< physical_device > enumerate( raks::vkcpp::instance instance );
+    static std::vector< physical_device > enumerate( vkcpp::instance const& instance );
 
     physical_device() = default;
 
-    VkPhysicalDevice native() const noexcept { return native_; }
+    [[nodiscard]] VkPhysicalDevice native() const noexcept { return native_; }
 
     struct property : public VkPhysicalDeviceProperties
     {
-        explicit property( physical_device const i_physical_device ) : VkPhysicalDeviceProperties{} { vkGetPhysicalDeviceProperties( i_physical_device.native(), this ); }
+        explicit property( physical_device const i_physical_device )
+            : VkPhysicalDeviceProperties{}
+        {
+            vkGetPhysicalDeviceProperties( i_physical_device.native(), this );
+        }
 
-        version api_version() const noexcept { return version( apiVersion ); }
-        version driver_version() const noexcept { return version( driverVersion ); }
-        physical_device::kind kind() const noexcept { return static_cast< physical_device::kind >( deviceType ); }
+        [[nodiscard]] version api_version() const noexcept { return version( apiVersion ); }
+        [[nodiscard]] version driver_version() const noexcept { return version( driverVersion ); }
+        [[nodiscard]] physical_device::kind kind() const noexcept { return static_cast< physical_device::kind >( deviceType ); }
+        [[nodiscard]] std::string_view name() const noexcept { return std::string_view( static_cast< char const* >( deviceName ) ); }
+
     };
 
     class feature : public VkPhysicalDeviceFeatures
@@ -706,7 +748,11 @@ public:
         feature()
             : VkPhysicalDeviceFeatures{}
         {}
-        explicit feature( physical_device const physical_device ) : VkPhysicalDeviceFeatures{} { vkGetPhysicalDeviceFeatures( physical_device.native(), this ); }
+        explicit feature( physical_device const physical_device )
+            : VkPhysicalDeviceFeatures{}
+        {
+            vkGetPhysicalDeviceFeatures( physical_device.native(), this );
+        }
     };
 
     class memory_property : public VkPhysicalDeviceMemoryProperties
@@ -722,9 +768,13 @@ public:
         };
         using flags = enum_flags< flag >;
 
-        explicit memory_property( physical_device const physical_device ) : VkPhysicalDeviceMemoryProperties{} { vkGetPhysicalDeviceMemoryProperties( physical_device.native(), this ); }
+        explicit memory_property( physical_device const physical_device )
+            : VkPhysicalDeviceMemoryProperties{}
+        {
+            vkGetPhysicalDeviceMemoryProperties( physical_device.native(), this );
+        }
 
-        unsigned find_memory_type_index( unsigned memory_type_index_bits, flags memory_type_flags ) const noexcept;
+        [[nodiscard]] unsigned find_memory_type_index( unsigned memory_type_index_bits, flags memory_type_flags ) const noexcept;
     };
 };
 
@@ -742,7 +792,8 @@ public:
 
     device() = default;
 
-    explicit device( base_type&& i_handle ) : base_type( std::move( i_handle ) )
+    explicit device( base_type&& i_handle )
+        : base_type( std::move( i_handle ) )
     {}
 
     void wait_idle() const;
@@ -773,7 +824,7 @@ public:
 
             static std::vector< family > enumerate( physical_device physical_device );
 
-            bool does( ability_flags const abilities ) const { return 0 != ( queueFlags & abilities() ); }
+            [[nodiscard]] bool does( ability_flags const abilities ) const { return 0 != ( queueFlags & abilities() ); }
         };
 
         enum kind
@@ -793,7 +844,7 @@ public:
 
         queue( device device, family::id_type family_index, id_type index );
 
-        VkQueue native() const { return native_; }
+        [[nodiscard]] VkQueue native() const { return native_; }
 
         void wait_idle() const;
 
@@ -855,7 +906,7 @@ class semaphore : public private_::derived_handle< VkDevice, VkSemaphore, vkDest
 {
 public:
     using base_type = private_::derived_handle< VkDevice, VkSemaphore, vkDestroySemaphore, handle_kind >;
-    explicit semaphore( device device = raks::vkcpp::device(), size_t size = 1 );
+    explicit semaphore( device device = vkcpp::device(), size_t size = 1 );
 };
 
 template< derived_handle_kind handle_kind = derived_handle_kind::unique >
@@ -870,7 +921,7 @@ public:
     };
     using create_flags = enum_flags< create_flag >;
 
-    explicit fence( device device = raks::vkcpp::device(), size_t size = 1, create_flags flags = create_flags() );
+    explicit fence( device device = vkcpp::device(), size_t size = 1, create_flags flags = create_flags() );
 
     void wait( unsigned long long timeout );
     void reset_signal();
@@ -880,7 +931,6 @@ protected:
 };
 
 } // namespace vkcpp
-} // namespace raks
 
-#endif // _RAKS_VKCPP_ELEMENTS_INCLUDED_
+#endif // _VKCPP_ELEMENTS_INCLUDED_
 
