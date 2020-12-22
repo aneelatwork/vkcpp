@@ -11,7 +11,7 @@ target_sources( ${CMAKE_PROJECT_NAME}
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/elements.cpp
     )
-target_compile_features( ${CMAKE_PROJECT_NAME} PUBLIC cxx_std_17 )
+target_compile_features( ${CMAKE_PROJECT_NAME} PUBLIC cxx_std_20 )
 target_link_libraries( ${CMAKE_PROJECT_NAME} PUBLIC ${CONAN_LIBS} )
 target_include_directories( ${CMAKE_PROJECT_NAME} 
     PUBLIC
@@ -22,6 +22,5 @@ target_include_directories( ${CMAKE_PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/src
 )
 
-message( STATUS "conan libs =${CONAN_LIBS}" )
 add_subdirectory( test )
 

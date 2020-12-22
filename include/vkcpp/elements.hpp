@@ -114,8 +114,8 @@ public:
 private:
     void reset_impl( weak_handle&& handle ) noexcept
     {
-        *(this->pnative()) = handle.native();
-        *(handle.pnative()) = VK_NULL_HANDLE;
+        *( this->pnative() ) = handle.native();
+        *( handle.pnative() ) = VK_NULL_HANDLE;
     }
 };
 
@@ -739,7 +739,6 @@ public:
         [[nodiscard]] version driver_version() const noexcept { return version( driverVersion ); }
         [[nodiscard]] physical_device::kind kind() const noexcept { return static_cast< physical_device::kind >( deviceType ); }
         [[nodiscard]] std::string_view name() const noexcept { return std::string_view( static_cast< char const* >( deviceName ) ); }
-
     };
 
     class feature : public VkPhysicalDeviceFeatures
