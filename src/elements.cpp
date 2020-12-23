@@ -4,35 +4,6 @@
 
 namespace
 {
-VkApplicationInfo application_info( std::string const& app_name, vkcpp::version const app_version, std::string const& engine_name,
-                                    vkcpp::version const engine_version )
-{
-    VkApplicationInfo result{};
-
-    result.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    result.apiVersion = ( uint32_t )vkcpp::version( 1, 2, 0 );
-    result.pEngineName = engine_name.c_str();
-    result.engineVersion = ( uint32_t )engine_version;
-    result.pApplicationName = app_name.c_str();
-    result.applicationVersion = ( uint32_t )app_version;
-    result.pNext = nullptr;
-    return result;
-}
-
-VkInstanceCreateInfo instance_creation_info( VkApplicationInfo const& app_info )
-{
-    VkInstanceCreateInfo result{};
-    result.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    result.pNext = nullptr;
-    result.flags = 0;
-    result.pApplicationInfo = &app_info;
-    result.enabledLayerCount = 0;
-    result.ppEnabledLayerNames = nullptr;
-    result.enabledExtensionCount = 0;
-    result.ppEnabledExtensionNames = nullptr;
-    return result;
-}
-
 VKAPI_ATTR VkBool32 VKAPI_CALL report_callback( VkDebugReportFlagsEXT flag, VkDebugReportObjectTypeEXT object_type, uint64_t object, size_t location,
                                                 int32_t message_code, const char* player_prefix, const char* pmessage, void* puser_data )
 {
@@ -96,21 +67,31 @@ std::vector< extension > extension::enumerate( layer::id_type const layer_id )
     throw exception( status, dbg::object::INSTANCE, "extension enumeration" );
 }
 
-instance instance::builder::build( std::string const& app_name, version const app_version, std::string const& engine_name, vkcpp::version const engine_version )
+instance::instance( std::string const& app_name, version app_version, std::string const& engine_name, version engine_version,
+                    std::vector< layer::id_type > const& layers, std::vector< extension::id_type > const& extensions )
+    : base_type()
 {
-    auto app_info = application_info( app_name, app_version, engine_name, engine_version );
-    auto create_info = instance_creation_info( app_info );
-    auto extras_count = uint32_t( 0 );
+    VkApplicationInfo app_info{ .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+                                .pNext = nullptr,
+                                .pApplicationName = app_name.c_str(),
+                                .applicationVersion = ( uint32_t )app_version,
+                                .pEngineName = engine_name.c_str(),
+                                .engineVersion = ( uint32_t )engine_version,
+                                .apiVersion = ( uint32_t )vkcpp::version( 1, 2, 0 ) };
 
-    create_info.enabledLayerCount = static_cast< uint32_t >( layer_list_.size() );
-    create_info.ppEnabledLayerNames = ( 0 < create_info.enabledLayerCount ? layer_list_.data() : nullptr );
-    create_info.enabledExtensionCount = static_cast< uint32_t >( extension_list_.size() );
-    create_info.ppEnabledExtensionNames = ( 0 < create_info.enabledExtensionCount ? extension_list_.data() : nullptr );
+    VkInstanceCreateInfo create_info{ .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+                                      .pNext = nullptr,
+                                      .flags = 0,
+                                      .pApplicationInfo = &app_info,
+                                      .enabledLayerCount = static_cast< uint32_t >( layers.size() ),
+                                      .ppEnabledLayerNames = 0 < create_info.enabledLayerCount ? layers.data() : nullptr,
+                                      .enabledExtensionCount = static_cast< uint32_t >( extensions.size() ),
+                                      .ppEnabledExtensionNames = 0 < create_info.enabledExtensionCount ? extensions.data() : nullptr };
 
     auto status = vkCreateInstance( &create_info, nullptr, pnative() );
     if( VK_SUCCESS == status )
     {
-        return instance( std::move( *this ) );
+        return;
     }
     throw exception( status, dbg::object::INSTANCE, "creation" );
 }
@@ -246,30 +227,30 @@ void device::wait_idle() const
     }
 }
 
-device::builder& device::builder::reserve_queue_family( queue::family::id_type const family_index, std::vector< queue::priority_type > queue_priority )
+device::builder& device::builder::reserve_queue_family( queue::family::id_type const family_index, std::vector< queue::priority_type > queue_priority ) &
 {
     queue_priorities_.push_back( std::move( queue_priority ) );
-    reserved_queues_.emplace_back( VkDeviceQueueCreateInfo() );
-    reserved_queues_.back().sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    reserved_queues_.back().pNext = nullptr;
-    reserved_queues_.back().flags = 0;
-    reserved_queues_.back().queueFamilyIndex = family_index;
-    reserved_queues_.back().queueCount = static_cast< uint32_t >( queue_priorities_.back().size() );
-    reserved_queues_.back().pQueuePriorities = queue_priorities_.back().data();
+    reserved_queues_.push_back( VkDeviceQueueCreateInfo{ .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                                                         .pNext = nullptr,
+                                                         .flags = 0,
+                                                         .queueFamilyIndex = family_index,
+                                                         .queueCount = static_cast< uint32_t >( queue_priorities_.back().size() ),
+                                                         .pQueuePriorities = queue_priorities_.back().data() } );
     return *this;
 }
 
-device device::builder::build( physical_device const physical_device, physical_device::feature const& feature )
+device device::builder::build( physical_device const physical_device, physical_device::feature const& feature, std::vector< layer::id_type > const& layers,
+                               std::vector< device_extension::id_type > const& extensions )
 {
     VkDeviceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     create_info.pNext = nullptr;
     create_info.flags = 0;
 
-    create_info.enabledLayerCount = static_cast< uint32_t >( layer_list_.size() );
-    create_info.ppEnabledLayerNames = ( 0 < create_info.enabledLayerCount ? layer_list_.data() : nullptr );
-    create_info.enabledExtensionCount = static_cast< uint32_t >( extension_list_.size() );
-    create_info.ppEnabledExtensionNames = ( 0 < create_info.enabledExtensionCount ? extension_list_.data() : nullptr );
+    create_info.enabledLayerCount = static_cast< uint32_t >( layers.size() );
+    create_info.ppEnabledLayerNames = ( 0 < create_info.enabledLayerCount ? layers.data() : nullptr );
+    create_info.enabledExtensionCount = static_cast< uint32_t >( extensions.size() );
+    create_info.ppEnabledExtensionNames = ( 0 < create_info.enabledExtensionCount ? extensions.data() : nullptr );
 
     create_info.queueCreateInfoCount = static_cast< uint32_t >( reserved_queues_.size() );
     create_info.pQueueCreateInfos = reserved_queues_.data();

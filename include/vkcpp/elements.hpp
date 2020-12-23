@@ -633,53 +633,17 @@ public:
     using base_type = private_::source_handle< VkInstance, vkDestroyInstance >;
 
     using base_type::base_type;
+
     explicit instance( base_type&& base )
         : base_type( std::move( base ) )
     {}
 
-    class builder : public base_type
-    {
-    public:
-        builder() = default;
+    instance( std::string const& app_name, version app_version, std::string const& engine_name, version engine_version,
+              std::vector< layer::id_type > const& layers, std::vector< extension::id_type > const& extensions );
 
-        builder& add_layer( layer::id_type const i_id )
-        {
-            layer_list_.push_back( i_id );
-            return *this;
-        }
-
-        template< typename iterator_type >
-        builder& add_layer( iterator_type i_begin, iterator_type const i_end )
-        {
-            for( ; i_begin != i_end; i_begin++ )
-            {
-                layer_list_.push_back( *i_begin );
-            }
-            return *this;
-        }
-
-        builder& add_extension( extension::id_type const& i_id )
-        {
-            extension_list_.push_back( i_id );
-            return *this;
-        }
-
-        template< typename iterator_type >
-        builder& add_extension( iterator_type i_begin, iterator_type const i_end )
-        {
-            for( ; i_begin != i_end; i_begin++ )
-            {
-                extension_list_.push_back( *i_begin );
-            }
-            return *this;
-        }
-
-        instance build( std::string const& app_name, version app_version, std::string const& engine_name, version engine_version );
-
-    private:
-        std::vector< layer::id_type > layer_list_;
-        std::vector< extension::id_type > extension_list_;
-    };
+private:
+    std::vector< layer::id_type > layer_list_;
+    std::vector< extension::id_type > extension_list_;
 };
 
 namespace dbg
@@ -823,7 +787,7 @@ public:
 
             static std::vector< family > enumerate( physical_device physical_device );
 
-            [[nodiscard]] bool does( ability_flags const abilities ) const { return 0 != ( queueFlags & abilities() ); }
+            [[nodiscard]] bool has( ability_flags const abilities ) const { return abilities() == ( queueFlags & abilities() ); }
         };
 
         enum kind
@@ -854,49 +818,21 @@ public:
     class builder : public base_type
     {
     private:
-        std::vector< layer::id_type > layer_list_;
-        std::vector< extension::id_type > extension_list_;
         std::vector< VkDeviceQueueCreateInfo > reserved_queues_;
         std::vector< std::vector< queue::priority_type > > queue_priorities_;
 
     public:
         builder() = default;
 
-        builder& add_layer( layer::id_type const id )
+        builder& reserve_queue_family( queue::family::id_type family_index, std::vector< queue::priority_type > queue_priority ) &;
+
+        builder&& reserve_queue_family( queue::family::id_type family_index, std::vector< queue::priority_type > queue_priority ) &&
         {
-            layer_list_.push_back( id );
-            return *this;
+            return std::move( reserve_queue_family( family_index, std::move( queue_priority ) ) );
         }
 
-        template< typename iterator_type >
-        builder& add_layer( iterator_type begin, iterator_type const end )
-        {
-            for( ; begin != end; begin++ )
-            {
-                layer_list_.push_back( *begin );
-            }
-            return *this;
-        }
-
-        builder& add_extension( extension::id_type const id )
-        {
-            extension_list_.push_back( id );
-            return *this;
-        }
-
-        template< typename iterator_type >
-        builder& add_extension( iterator_type begin, iterator_type const end )
-        {
-            for( ; begin != end; begin++ )
-            {
-                extension_list_.push_back( *begin );
-            }
-            return *this;
-        }
-
-        builder& reserve_queue_family( queue::family::id_type family_index, std::vector< queue::priority_type > queue_priority );
-
-        device build( physical_device physical_device, physical_device::feature const& feature );
+        device build( physical_device physical_device, physical_device::feature const& feature, std::vector< layer::id_type > const& layers,
+                      std::vector< device_extension::id_type > const& extensions );
     };
 };
 

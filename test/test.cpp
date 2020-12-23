@@ -17,12 +17,12 @@ int main( [[maybe_unused]] int argc, [[maybe_unused]] char* argv[] )
         auto extensions = vkcpp::extension::enumerate( nullptr );
         for( auto const& ie : extensions ) { std::cout << "Extension: " << ie.name() << ',' << ie.spec_version() << std::endl; }
 
-        auto instance = vkcpp::instance::builder()
-                            .add_extension( vkcpp::extension::debug_report )
-                            .add_layer( vkcpp::layer::vendor_standard_layer )
-                            .build( "vkcpp-test", vkcpp::version( 0, 0, 1 ), "vkcpp-engine", vkcpp::version( 0, 0, 1 ) );
-
+        vkcpp::instance instance( "vkcpp-test", vkcpp::version( 0, 0, 1 ), "vkcpp-engine", vkcpp::version( 0, 0, 1 )
+                                , { vkcpp::layer::vendor_standard_layer }
+                                , { vkcpp::extension::debug_report } );
+ 
         auto devlist = vkcpp::physical_device::enumerate( instance );
+
         for( auto const& id : devlist )
         {
             auto dev_attr = vkcpp::physical_device::property( id );
